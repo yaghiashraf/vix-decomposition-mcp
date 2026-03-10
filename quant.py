@@ -13,14 +13,14 @@ def mock_option_chain(spot: float, base_iv: float) -> pd.DataFrame:
         'iv': ivs * 100
     })
 
-def fetch_polygon_spot(ticker: str, date: str, api_key: str) -> float:
-    """Fetches end-of-day close price from Polygon.io"""
-    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date}/{date}?apiKey={api_key}"
+def fetch_twelvedata_spot(ticker: str, date: str, api_key: str) -> float:
+    """Fetches end-of-day close price from Twelve Data"""
+    url = f"https://api.twelvedata.com/eod?symbol={ticker}&date={date}&apikey={api_key}"
     resp = requests.get(url, timeout=5)
     if resp.status_code == 200:
         data = resp.json()
-        if data.get('results') and len(data['results']) > 0:
-            return data['results'][0]['c'] # close price
+        if "close" in data:
+            return float(data["close"])
     return None
 
 def decompose_vix_change(
@@ -31,24 +31,23 @@ def decompose_vix_change(
 ) -> Dict[str, Any]:
     """
     Computes VIX decomposition between two dates.
-    Attempts to fetch real Spot and VIX data from Polygon.io using an API key.
-    Falls back to mathematical simulation if the key lacks permissions for the timeframe.
+    Attempts to fetch real Spot and VIX data from Twelve Data using an API key.
+    Falls back to mathematical simulation if the key lacks permissions for the timeframe/ticker.
     """
-    api_key = os.environ.get("POLYGON_API_KEY", "VK2vL795JiRsIW1ra0pF_To7Qq3pNbnE")
+    api_key = os.environ.get("TWELVEDATA_API_KEY", "79567f10cd1c4a19918511564686fbe2")
     
     # Try fetching real data
-    # Polygon uses 'I:SPX' for S&P 500 Index and 'I:VIX' for VIX Index
-    # If the user's tier doesn't support indices, we fallback to simulation
     real_spot_from = None
     real_spot_to = None
     real_vix_from = None
     real_vix_to = None
     
     try:
-        real_spot_from = fetch_polygon_spot(f"I:{underlying}", date_from, api_key)
-        real_spot_to = fetch_polygon_spot(f"I:{underlying}", date_to, api_key)
-        real_vix_from = fetch_polygon_spot("I:VIX", date_from, api_key)
-        real_vix_to = fetch_polygon_spot("I:VIX", date_to, api_key)
+        # Twelve Data uses standard tickers. Some indices like SPX might require paid plans.
+        real_spot_from = fetch_twelvedata_spot(underlying, date_from, api_key)
+        real_spot_to = fetch_twelvedata_spot(underlying, date_to, api_key)
+        real_vix_from = fetch_twelvedata_spot("VIX", date_from, api_key)
+        real_vix_to = fetch_twelvedata_spot("VIX", date_to, api_key)
     except Exception:
         pass
 
@@ -103,9 +102,9 @@ def decompose_vix_change(
     ]
     
     if using_real_data:
-        commentary.insert(0, "✓ Loaded real historical spot and VIX quotes from Polygon API.")
+        commentary.insert(0, "✓ Loaded real historical spot and VIX quotes from Twelve Data API.")
     else:
-        commentary.insert(0, "⚠️ Polygon API limit reached. Using fallback simulation.")
+        commentary.insert(0, "⚠️ Twelve Data API limit reached or index paywalled. Using fallback simulation.")
         
     return {
         "underlying": underlying,
@@ -137,7 +136,7 @@ def decompose_vix_change(
         "commentary": commentary,
         "metadata": {
             "method_used": methodology,
-            "data_source": "Polygon.io" if using_real_data else "Simulated",
+            "data_source": "Twelve Data" if using_real_data else "Simulated",
             "expiries_used": ["30-day constant maturity"],
             "quote_time_from": "16:15:00 ET",
             "quote_time_to": "16:15:00 ET"
