@@ -16,20 +16,26 @@ def mock_option_chain(spot: float, base_iv: float) -> pd.DataFrame:
 def fetch_twelvedata_spot_range(ticker: str, date_from: str, date_to: str, api_key: str) -> tuple[float, float]:
     """
     Fetches the close prices for both dates using a single API request to save rate limits.
+    If exact dates aren't found (weekends/holidays), it falls back to the nearest previous trading day.
     Returns (close_from, close_to).
     """
-    # Fetch the last 30 days to ensure we capture both requested dates even with weekends/holidays.
     url = f"https://api.twelvedata.com/time_series?symbol={ticker}&interval=1day&outputsize=30&apikey={api_key}"
     resp = requests.get(url, timeout=5)
     
     if resp.status_code == 200:
         data = resp.json()
         if "values" in data:
+            # Sort chronologically so we can search backwards easily
             prices = {day["datetime"]: float(day["close"]) for day in data["values"]}
+            dates_desc = sorted(prices.keys(), reverse=True)
             
-            # Extract the specific dates
-            if date_from in prices and date_to in prices:
-                return prices[date_from], prices[date_to]
+            # Find closest date on or before date_from
+            actual_date_from = next((d for d in dates_desc if d <= date_from), None)
+            # Find closest date on or before date_to
+            actual_date_to = next((d for d in dates_desc if d <= date_to), None)
+            
+            if actual_date_from and actual_date_to:
+                return prices[actual_date_from], prices[actual_date_to]
     return None, None
 
 def decompose_vix_change(
