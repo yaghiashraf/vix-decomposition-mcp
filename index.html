@@ -1,136 +1,309 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VIX Decomposition Engine</title>
+    <title>Institutional Volatility Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: {
+                            850: '#141c2e',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        /* Custom scrollbar for dark mode */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+        }
+
+        .ai-typing-indicator::after {
+            content: '▌';
+            animation: blink 1s step-end infinite;
+            color: #818cf8;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+    </style>
 </head>
-<body class="bg-gray-100 text-gray-800 p-8">
-    <div class="max-w-6xl mx-auto space-y-6">
-        <header class="bg-white p-6 rounded-lg shadow-sm">
-            <h1 class="text-3xl font-bold text-gray-900">VIX Decomposition Engine</h1>
-            <p class="text-gray-500 mt-2">Analyze implied volatility shifts into constituent factors</p>
+<body class="bg-slate-950 text-slate-300 min-h-screen antialiased selection:bg-indigo-500/30 selection:text-indigo-200 p-4 md:p-8">
+    
+    <!-- Background glow effects -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-900/20 blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-900/10 blur-[120px]"></div>
+    </div>
+
+    <div class="max-w-7xl mx-auto space-y-6 relative z-10">
+        
+        <!-- Header & Controls -->
+        <header class="glass-panel rounded-2xl p-6 md:p-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                    </div>
+                    <h1 class="text-2xl font-bold text-white tracking-tight">Institutional Volatility Engine</h1>
+                </div>
+                <p class="text-slate-400 text-sm">Powered by Real Market Data & Llama 3 AI</p>
+            </div>
             
-            <div class="mt-6 flex flex-wrap gap-4 items-end">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Underlying</label>
-                    <input type="text" id="underlying" value="SPX" class="mt-1 block w-24 rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+            <div class="flex flex-wrap items-end gap-3">
+                <div class="group">
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5 group-focus-within:text-indigo-400 transition-colors">Underlying (e.g. SPX, AAPL)</label>
+                    <input type="text" id="underlying" value="AAPL" class="block w-28 bg-slate-900/80 border border-slate-700 rounded-lg shadow-inner py-2 px-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all outline-none">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">From Date</label>
-                    <input type="date" id="date_from" value="2026-03-01" class="mt-1 block w-40 rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                <div class="group">
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5 group-focus-within:text-indigo-400 transition-colors">From Date</label>
+                    <input type="date" id="date_from" value="2026-03-02" class="block w-36 bg-slate-900/80 border border-slate-700 rounded-lg shadow-inner py-2 px-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">To Date</label>
-                    <input type="date" id="date_to" value="2026-03-05" class="mt-1 block w-40 rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                <div class="group">
+                    <label class="block text-xs font-medium text-slate-400 mb-1.5 group-focus-within:text-indigo-400 transition-colors">To Date</label>
+                    <input type="date" id="date_to" value="2026-03-09" class="block w-36 bg-slate-900/80 border border-slate-700 rounded-lg shadow-inner py-2 px-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-all outline-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert">
                 </div>
-                <button onclick="fetchDecomposition()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                    Analyze Move
+                <button onclick="fetchDecomposition()" id="analyze-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-5 py-2 rounded-lg shadow-lg shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all active:scale-95 flex items-center gap-2">
+                    <span>Analyze Move</span>
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </button>
             </div>
         </header>
 
-        <div id="loading" class="hidden text-center py-10">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
-            <p class="mt-2 text-gray-500">Computing decomposition...</p>
+        <!-- Loading State -->
+        <div id="loading" class="hidden flex flex-col items-center justify-center py-20">
+            <div class="relative w-12 h-12">
+                <div class="absolute inset-0 rounded-full border-t-2 border-indigo-500 animate-spin"></div>
+                <div class="absolute inset-2 rounded-full border-r-2 border-purple-500 animate-spin" style="animation-direction: reverse; animation-duration: 1.5s;"></div>
+            </div>
+            <p class="mt-4 text-slate-400 font-medium animate-pulse">Quant Engine Crunching Data...</p>
         </div>
 
+        <div id="error-box" class="hidden glass-panel border-rose-500/30 bg-rose-500/5 text-rose-200 p-4 rounded-xl"></div>
+
+        <!-- Dashboard Results -->
         <div id="results" class="hidden space-y-6">
-            <!-- Top stats row -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h3 class="text-sm font-medium text-gray-500">Spot Move</h3>
-                    <div class="mt-2 flex items-baseline gap-2">
-                        <span id="spot_from" class="text-2xl font-semibold text-gray-900"></span>
-                        <span class="text-gray-400">→</span>
-                        <span id="spot_to" class="text-2xl font-semibold text-gray-900"></span>
+            
+            <!-- Top Row: Stats & AI Panel -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- Metrics Column (Takes 1 column on desktop) -->
+                <div class="space-y-6">
+                    <div class="glass-panel p-6 rounded-2xl relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        </div>
+                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Spot Price Move</h3>
+                        <div class="flex items-end gap-3">
+                            <span id="spot_from" class="text-2xl font-light text-slate-400 line-through decoration-slate-600"></span>
+                            <span id="spot_to" class="text-3xl font-semibold text-white"></span>
+                        </div>
+                        <div class="mt-3 flex items-center gap-2">
+                            <span id="spot_pct_badge" class="px-2 py-0.5 rounded text-sm font-medium bg-slate-800"></span>
+                            <span class="text-sm text-slate-500">Return over period</span>
+                        </div>
                     </div>
-                    <p id="spot_pct" class="text-sm mt-1"></p>
-                </div>
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h3 class="text-sm font-medium text-gray-500">VIX Change</h3>
-                    <div class="mt-2 flex items-baseline gap-2">
-                        <span id="vix_from" class="text-2xl font-semibold text-gray-900"></span>
-                        <span class="text-gray-400">→</span>
-                        <span id="vix_to" class="text-2xl font-semibold text-gray-900"></span>
+
+                    <div class="glass-panel p-6 rounded-2xl relative overflow-hidden group">
+                        <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                        </div>
+                        <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Volatility Shift (VIX)</h3>
+                        <div class="flex items-end gap-3">
+                            <span id="vix_from" class="text-2xl font-light text-slate-400 line-through decoration-slate-600"></span>
+                            <span id="vix_to" class="text-3xl font-semibold text-white"></span>
+                        </div>
+                        <div class="mt-3 flex items-center gap-2">
+                            <span id="vix_abs_badge" class="px-2 py-0.5 rounded text-sm font-medium bg-slate-800"></span>
+                            <span class="text-sm text-slate-500">Absolute pt change</span>
+                        </div>
                     </div>
-                    <p id="vix_abs" class="text-sm mt-1"></p>
                 </div>
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h3 class="text-sm font-medium text-gray-500">Commentary</h3>
-                    <ul id="commentary_list" class="mt-2 text-sm text-gray-700 space-y-1 list-disc list-inside"></ul>
+
+                <!-- AI Insights Column (Takes 2 columns on desktop) -->
+                <div class="lg:col-span-2 glass-panel p-6 md:p-8 rounded-2xl bg-gradient-to-br from-slate-900/80 to-indigo-900/10 border-indigo-500/20 relative overflow-hidden flex flex-col">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 opacity-50"></div>
+                    
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="p-1.5 rounded bg-indigo-500/20 text-indigo-400">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-semibold text-white">Llama 3 Quant Synthesis</h2>
+                        <span id="ai-status" class="ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-slate-800 text-slate-400">Waiting for data...</span>
+                    </div>
+                    
+                    <div class="flex-grow flex items-center justify-center py-4">
+                        <div id="ai-content" class="w-full text-[15px] leading-relaxed text-slate-300 font-light">
+                            <!-- AI Text injected here -->
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t border-slate-800/50">
+                        <ul id="commentary_list" class="text-xs text-slate-500 space-y-1.5"></ul>
+                    </div>
                 </div>
             </div>
 
-            <!-- Charts row -->
+            <!-- Bottom Row: Charts -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Waterfall / Bar Chart -->
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Factor Breakdown (pts)</h2>
-                    <canvas id="factorChart"></canvas>
+                <div class="glass-panel p-6 rounded-2xl">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-6">Attribution Factor Breakdown</h2>
+                    <div class="relative h-64">
+                        <canvas id="factorChart"></canvas>
+                    </div>
                 </div>
                 
                 <!-- IV Curve Line Chart -->
-                <div class="bg-white p-6 rounded-lg shadow-sm">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Implied Volatility Smile Shift</h2>
-                    <canvas id="curveChart"></canvas>
+                <div class="glass-panel p-6 rounded-2xl">
+                    <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wider mb-6">Implied Volatility Surface Shift</h2>
+                    <div class="relative h-64">
+                        <canvas id="curveChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // Set Chart.js defaults for Dark Theme
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.borderColor = '#1e293b';
+        Chart.defaults.font.family = 'Inter, sans-serif';
+
         let factorChartInstance = null;
         let curveChartInstance = null;
 
         async function fetchDecomposition() {
-            const underlying = document.getElementById('underlying').value;
+            const underlying = document.getElementById('underlying').value.toUpperCase();
             const date_from = document.getElementById('date_from').value;
             const date_to = document.getElementById('date_to').value;
+            const btn = document.getElementById('analyze-btn');
 
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('results').classList.add('hidden');
+            document.getElementById('error-box').classList.add('hidden');
+            
+            // Reset AI panel state
+            document.getElementById('ai-content').innerHTML = '';
+            const aiStatus = document.getElementById('ai-status');
+            aiStatus.textContent = 'Generating...';
+            aiStatus.className = 'ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse';
+
+            // Disable button
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
 
             try {
+                // 1. Fetch Mathematical Data
                 const response = await fetch(`/api/decompose?underlying=${underlying}&date_from=${date_from}&date_to=${date_to}`);
                 const data = await response.json();
 
                 if (data.error) throw new Error(data.error);
 
+                // Render math & charts immediately
                 renderResults(data);
+                
+                // 2. Fire off background request to Hugging Face Llama 3
+                triggerAIExplanation(data);
+
             } catch (err) {
-                alert('Error computing decomposition: ' + err.message);
+                const errBox = document.getElementById('error-box');
+                errBox.innerHTML = `<strong>Execution Error:</strong> ${err.message}`;
+                errBox.classList.remove('hidden');
             } finally {
                 document.getElementById('loading').classList.add('hidden');
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
+        async function triggerAIExplanation(data) {
+            const aiContent = document.getElementById('ai-content');
+            const aiStatus = document.getElementById('ai-status');
+            
+            aiContent.innerHTML = '<span class="ai-typing-indicator">Analyzing surface dynamics</span>';
+            
+            try {
+                const response = await fetch(`/api/explain`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                aiStatus.textContent = 'Analysis Complete';
+                aiStatus.className = 'ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+                
+                aiContent.innerHTML = result.analysis;
+                
+            } catch (err) {
+                aiStatus.textContent = 'AI Failed';
+                aiStatus.className = 'ml-auto text-xs font-medium px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20';
+                aiContent.innerHTML = `<span class="text-rose-400">Failed to generate AI insights: ${err.message}</span>`;
             }
         }
 
         function renderResults(data) {
             document.getElementById('results').classList.remove('hidden');
 
-            // Set top stats
-            document.getElementById('spot_from').textContent = data.spot.from.toLocaleString();
-            document.getElementById('spot_to').textContent = data.spot.to.toLocaleString();
+            // Set Spot Stats
+            document.getElementById('spot_from').textContent = data.spot.from.toLocaleString('en-US', {style:'currency', currency:'USD'});
+            document.getElementById('spot_to').textContent = data.spot.to.toLocaleString('en-US', {style:'currency', currency:'USD'});
             
-            const spotPctEl = document.getElementById('spot_pct');
-            spotPctEl.textContent = `${data.spot.pct_change > 0 ? '+' : ''}${data.spot.pct_change}%`;
-            spotPctEl.className = `text-sm mt-1 font-medium ${data.spot.pct_change > 0 ? 'text-green-600' : 'text-red-600'}`;
+            const spotBadge = document.getElementById('spot_pct_badge');
+            const spotIsUp = data.spot.pct_change >= 0;
+            spotBadge.textContent = `${spotIsUp ? '+' : ''}${data.spot.pct_change}%`;
+            spotBadge.className = `px-2 py-0.5 rounded text-sm font-bold ${spotIsUp ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`;
 
+            // Set VIX Stats
             document.getElementById('vix_from').textContent = data.vix.from.toFixed(2);
             document.getElementById('vix_to').textContent = data.vix.to.toFixed(2);
             
-            const vixAbsEl = document.getElementById('vix_abs');
-            vixAbsEl.textContent = `${data.vix.abs_change > 0 ? '+' : ''}${data.vix.abs_change} pts`;
-            vixAbsEl.className = `text-sm mt-1 font-medium ${data.vix.abs_change > 0 ? 'text-red-600' : 'text-green-600'}`; // Vol up is often red/scary
+            const vixBadge = document.getElementById('vix_abs_badge');
+            const vixIsUp = data.vix.abs_change >= 0;
+            vixBadge.textContent = `${vixIsUp ? '+' : ''}${data.vix.abs_change} pts`;
+            // Volatility up usually means market stress (red), vol down is calm (green)
+            vixBadge.className = `px-2 py-0.5 rounded text-sm font-bold ${vixIsUp ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`;
 
-            // Commentary
+            // Raw Engine System Logs
             const list = document.getElementById('commentary_list');
             list.innerHTML = '';
             data.commentary.forEach(text => {
                 const li = document.createElement('li');
-                li.textContent = text;
+                li.className = "flex items-start gap-2";
+                li.innerHTML = `<span class="text-indigo-500/50 mt-0.5">›</span><span>${text}</span>`;
                 list.appendChild(li);
             });
 
@@ -143,25 +316,40 @@
             if (factorChartInstance) factorChartInstance.destroy();
 
             const factors = data.factors;
-            const factorLabels = ['Parallel Shift', 'Sticky Strike', 'Put Skew', 'Convexity'];
+            const factorLabels = ['Parallel Shift', 'Sticky Strike (Spot)', 'Put Skew', 'Convexity'];
             const factorData = [factors.parallel_shift, factors.sticky_strike, factors.put_skew, factors.downside_convexity];
-            const factorColors = factorData.map(val => val > 0 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)');
+            
+            // Vol up = red, vol down = green
+            const factorColors = factorData.map(val => val > 0 ? 'rgba(244, 63, 94, 0.6)' : 'rgba(16, 185, 129, 0.6)');
+            const factorBorders = factorData.map(val => val > 0 ? 'rgba(244, 63, 94, 1)' : 'rgba(16, 185, 129, 1)');
 
             factorChartInstance = new Chart(factorCtx, {
                 type: 'bar',
                 data: {
                     labels: factorLabels,
                     datasets: [{
-                        label: 'VIX Point Contribution',
+                        label: 'Vol Points',
                         data: factorData,
                         backgroundColor: factorColors,
-                        borderWidth: 1
+                        borderColor: factorBorders,
+                        borderWidth: 1,
+                        borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { title: { display: true, text: 'VIX Points' } } }
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: { backgroundColor: '#1e293b', titleColor: '#f8fafc', bodyColor: '#f8fafc', borderColor: '#334155', borderWidth: 1 }
+                    },
+                    scales: { 
+                        y: { 
+                            grid: { color: '#1e293b' },
+                            title: { display: true, text: 'VIX Points', color: '#64748b' } 
+                        },
+                        x: { grid: { display: false } }
+                    }
                 }
             });
 
@@ -171,7 +359,7 @@
 
             const curveFrom = data.curves.from;
             const curveTo = data.curves.to;
-            const strikes = curveFrom.map(p => p.strike);
+            const strikes = curveFrom.map(p => p.strike.toFixed(0));
 
             curveChartInstance = new Chart(curveCtx, {
                 type: 'line',
@@ -181,33 +369,47 @@
                         {
                             label: `T0 (${data.from_date})`,
                             data: curveFrom.map(p => p.iv),
-                            borderColor: 'rgba(156, 163, 175, 1)',
-                            backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                            borderColor: 'rgba(148, 163, 184, 0.5)', // Slate 400 with opacity
+                            backgroundColor: 'transparent',
                             borderDash: [5, 5],
+                            borderWidth: 2,
+                            pointRadius: 0,
                             tension: 0.4
                         },
                         {
                             label: `T1 (${data.to_date})`,
                             data: curveTo.map(p => p.iv),
-                            borderColor: 'rgba(79, 70, 229, 1)',
-                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            borderColor: 'rgba(99, 102, 241, 1)', // Indigo 500
+                            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                            borderWidth: 3,
+                            pointRadius: 2,
+                            pointBackgroundColor: '#0f172a',
+                            fill: true,
                             tension: 0.4
                         }
                     ]
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#cbd5e1', usePointStyle: true, boxWidth: 6 } },
+                        tooltip: { backgroundColor: '#1e293b', titleColor: '#f8fafc', bodyColor: '#f8fafc', borderColor: '#334155', borderWidth: 1 }
+                    },
                     scales: {
-                        x: { title: { display: true, text: 'Strike' } },
-                        y: { title: { display: true, text: 'Implied Volatility (%)' } }
+                        x: { 
+                            grid: { color: '#1e293b', drawBorder: false },
+                            title: { display: true, text: 'Strike Price', color: '#64748b' } 
+                        },
+                        y: { 
+                            grid: { color: '#1e293b', drawBorder: false },
+                            title: { display: true, text: 'Implied Volatility (%)', color: '#64748b' } 
+                        }
                     }
                 }
             });
         }
-
-        // Initialize on load
-        window.addEventListener('DOMContentLoaded', fetchDecomposition);
     </script>
 </body>
 </html>
