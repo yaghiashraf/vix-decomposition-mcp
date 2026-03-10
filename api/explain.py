@@ -17,7 +17,7 @@ class handler(BaseHTTPRequestHandler):
             post_data = self.rfile.read(content_length)
             data = json.loads(post_data)
             
-            hf_token = os.environ.get("HF_TOKEN", "")
+            hf_token = os.environ.get("HF_TOKEN", "").strip()
             
             system_prompt = "You are an expert quantitative volatility trader. Analyze the following VIX/Volatility decomposition data and explain what it implies for the market in 2 short, punchy paragraphs. Be highly analytical. Use professional trader terminology (e.g., vanna, volga, skew, parallel shift, delta-hedging)."
             
