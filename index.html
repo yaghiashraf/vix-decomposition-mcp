@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VIX Decomposition Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 p-8">
+    <div class="max-w-6xl mx-auto space-y-6">
+        <header class="bg-white p-6 rounded-lg shadow-sm">
+            <h1 class="text-3xl font-bold text-gray-900">VIX Decomposition Engine</h1>
+            <p class="text-gray-500 mt-2">Analyze implied volatility shifts into constituent factors</p>
+            
+            <div class="mt-6 flex flex-wrap gap-4 items-end">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Underlying</label>
+                    <input type="text" id="underlying" value="SPX" class="mt-1 block w-24 rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">From Date</label>
+                    <input type="date" id="date_from" value="2026-03-01" class="mt-1 block w-40 rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">To Date</label>
+                    <input type="date" id="date_to" value="2026-03-05" class="mt-1 block w-40 rounded-md border-gray-300 shadow-sm p-2 border focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <button onclick="fetchDecomposition()" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                    Analyze Move
+                </button>
+            </div>
+        </header>
+
+        <div id="loading" class="hidden text-center py-10">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+            <p class="mt-2 text-gray-500">Computing decomposition...</p>
+        </div>
+
+        <div id="results" class="hidden space-y-6">
+            <!-- Top stats row -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500">Spot Move</h3>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span id="spot_from" class="text-2xl font-semibold text-gray-900"></span>
+                        <span class="text-gray-400">→</span>
+                        <span id="spot_to" class="text-2xl font-semibold text-gray-900"></span>
+                    </div>
+                    <p id="spot_pct" class="text-sm mt-1"></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500">VIX Change</h3>
+                    <div class="mt-2 flex items-baseline gap-2">
+                        <span id="vix_from" class="text-2xl font-semibold text-gray-900"></span>
+                        <span class="text-gray-400">→</span>
+                        <span id="vix_to" class="text-2xl font-semibold text-gray-900"></span>
+                    </div>
+                    <p id="vix_abs" class="text-sm mt-1"></p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500">Commentary</h3>
+                    <ul id="commentary_list" class="mt-2 text-sm text-gray-700 space-y-1 list-disc list-inside"></ul>
+                </div>
+            </div>
+
+            <!-- Charts row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Waterfall / Bar Chart -->
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Factor Breakdown (pts)</h2>
+                    <canvas id="factorChart"></canvas>
+                </div>
+                
+                <!-- IV Curve Line Chart -->
+                <div class="bg-white p-6 rounded-lg shadow-sm">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Implied Volatility Smile Shift</h2>
+                    <canvas id="curveChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let factorChartInstance = null;
+        let curveChartInstance = null;
+
+        async function fetchDecomposition() {
+            const underlying = document.getElementById('underlying').value;
+            const date_from = document.getElementById('date_from').value;
+            const date_to = document.getElementById('date_to').value;
+
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results').classList.add('hidden');
+
+            try {
+                const response = await fetch(`/api/decompose?underlying=${underlying}&date_from=${date_from}&date_to=${date_to}`);
+                const data = await response.json();
+
+                if (data.error) throw new Error(data.error);
+
+                renderResults(data);
+            } catch (err) {
+                alert('Error computing decomposition: ' + err.message);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function renderResults(data) {
+            document.getElementById('results').classList.remove('hidden');
+
+            // Set top stats
+            document.getElementById('spot_from').textContent = data.spot.from.toLocaleString();
+            document.getElementById('spot_to').textContent = data.spot.to.toLocaleString();
+            
+            const spotPctEl = document.getElementById('spot_pct');
+            spotPctEl.textContent = `${data.spot.pct_change > 0 ? '+' : ''}${data.spot.pct_change}%`;
+            spotPctEl.className = `text-sm mt-1 font-medium ${data.spot.pct_change > 0 ? 'text-green-600' : 'text-red-600'}`;
+
+            document.getElementById('vix_from').textContent = data.vix.from.toFixed(2);
+            document.getElementById('vix_to').textContent = data.vix.to.toFixed(2);
+            
+            const vixAbsEl = document.getElementById('vix_abs');
+            vixAbsEl.textContent = `${data.vix.abs_change > 0 ? '+' : ''}${data.vix.abs_change} pts`;
+            vixAbsEl.className = `text-sm mt-1 font-medium ${data.vix.abs_change > 0 ? 'text-red-600' : 'text-green-600'}`; // Vol up is often red/scary
+
+            // Commentary
+            const list = document.getElementById('commentary_list');
+            list.innerHTML = '';
+            data.commentary.forEach(text => {
+                const li = document.createElement('li');
+                li.textContent = text;
+                list.appendChild(li);
+            });
+
+            renderCharts(data);
+        }
+
+        function renderCharts(data) {
+            // Factor Chart (Bar)
+            const factorCtx = document.getElementById('factorChart').getContext('2d');
+            if (factorChartInstance) factorChartInstance.destroy();
+
+            const factors = data.factors;
+            const factorLabels = ['Parallel Shift', 'Sticky Strike', 'Put Skew', 'Convexity'];
+            const factorData = [factors.parallel_shift, factors.sticky_strike, factors.put_skew, factors.downside_convexity];
+            const factorColors = factorData.map(val => val > 0 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)');
+
+            factorChartInstance = new Chart(factorCtx, {
+                type: 'bar',
+                data: {
+                    labels: factorLabels,
+                    datasets: [{
+                        label: 'VIX Point Contribution',
+                        data: factorData,
+                        backgroundColor: factorColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { title: { display: true, text: 'VIX Points' } } }
+                }
+            });
+
+            // Curve Chart (Line)
+            const curveCtx = document.getElementById('curveChart').getContext('2d');
+            if (curveChartInstance) curveChartInstance.destroy();
+
+            const curveFrom = data.curves.from;
+            const curveTo = data.curves.to;
+            const strikes = curveFrom.map(p => p.strike);
+
+            curveChartInstance = new Chart(curveCtx, {
+                type: 'line',
+                data: {
+                    labels: strikes,
+                    datasets: [
+                        {
+                            label: `T0 (${data.from_date})`,
+                            data: curveFrom.map(p => p.iv),
+                            borderColor: 'rgba(156, 163, 175, 1)',
+                            backgroundColor: 'rgba(156, 163, 175, 0.1)',
+                            borderDash: [5, 5],
+                            tension: 0.4
+                        },
+                        {
+                            label: `T1 (${data.to_date})`,
+                            data: curveTo.map(p => p.iv),
+                            borderColor: 'rgba(79, 70, 229, 1)',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { title: { display: true, text: 'Strike' } },
+                        y: { title: { display: true, text: 'Implied Volatility (%)' } }
+                    }
+                }
+            });
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', fetchDecomposition);
+    </script>
+</body>
+</html>
