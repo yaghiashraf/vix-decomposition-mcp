@@ -43,7 +43,8 @@ Put Skew: {data.get('factors', {}).get('put_skew', 0)} pts
             if not hf_token:
                 generated_text = "⚠️ <b>HF_TOKEN missing.</b><br/><br/>Please add your Hugging Face API Token in your Vercel Project Settings (Environment Variables) to enable the Llama 3 analysis engine."
             else:
-                api_url = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B-Instruct"
+                # Use the new Hugging Face Inference Router endpoint
+                api_url = "https://router.huggingface.co/hf-inference/models/meta-llama/Meta-Llama-3-8B-Instruct"
                 resp = requests.post(api_url, headers=headers, json=payload, timeout=15)
                 
                 if resp.status_code == 200:
@@ -51,7 +52,15 @@ Put Skew: {data.get('factors', {}).get('put_skew', 0)} pts
                     generated_text = result[0].get('generated_text', '').strip()
                     generated_text = generated_text.replace('\n', '<br/>')
                 elif resp.status_code == 503:
-                    generated_text = "⏳ Llama 3 is currently cold-booting on Hugging Face infrastructure. Please click analyze again in 30 seconds."
+                    # Fallback to an ungated Qwen model if Llama 3 is down or spinning up
+                    fallback_url = "https://router.huggingface.co/hf-inference/models/Qwen/Qwen2.5-32B-Instruct"
+                    resp_fallback = requests.post(fallback_url, headers=headers, json=payload, timeout=15)
+                    if resp_fallback.status_code == 200:
+                        result = resp_fallback.json()
+                        generated_text = result[0].get('generated_text', '').strip()
+                        generated_text = generated_text.replace('\n', '<br/>')
+                    else:
+                        generated_text = "⏳ AI Engine is currently cold-booting on Hugging Face infrastructure. Please click analyze again in 30 seconds."
                 elif resp.status_code in [401, 403]:
                     generated_text = "🔒 <b>Access Denied.</b><br/><br/>Ensure your HF_TOKEN is valid and that your Hugging Face account has been granted access to the Meta-Llama-3 repository."
                 else:
