@@ -13,15 +13,24 @@ def mock_option_chain(spot: float, base_iv: float) -> pd.DataFrame:
         'iv': ivs * 100
     })
 
-def fetch_twelvedata_spot(ticker: str, date: str, api_key: str) -> float:
-    """Fetches end-of-day close price from Twelve Data"""
-    url = f"https://api.twelvedata.com/eod?symbol={ticker}&date={date}&apikey={api_key}"
+def fetch_twelvedata_spot_range(ticker: str, date_from: str, date_to: str, api_key: str) -> tuple[float, float]:
+    """
+    Fetches the close prices for both dates using a single API request to save rate limits.
+    Returns (close_from, close_to).
+    """
+    # Fetch the last 30 days to ensure we capture both requested dates even with weekends/holidays.
+    url = f"https://api.twelvedata.com/time_series?symbol={ticker}&interval=1day&outputsize=30&apikey={api_key}"
     resp = requests.get(url, timeout=5)
+    
     if resp.status_code == 200:
         data = resp.json()
-        if "close" in data:
-            return float(data["close"])
-    return None
+        if "values" in data:
+            prices = {day["datetime"]: float(day["close"]) for day in data["values"]}
+            
+            # Extract the specific dates
+            if date_from in prices and date_to in prices:
+                return prices[date_from], prices[date_to]
+    return None, None
 
 def decompose_vix_change(
     underlying: str, 
@@ -31,23 +40,17 @@ def decompose_vix_change(
 ) -> Dict[str, Any]:
     """
     Computes VIX decomposition between two dates.
-    Attempts to fetch real Spot and VIX data from Twelve Data using an API key.
-    Falls back to mathematical simulation if the key lacks permissions for the timeframe/ticker.
+    Uses a single Twelve Data API request to fetch real Spot prices.
+    Uses mathematical simulation for VIX since it is paywalled on the free tier.
     """
     api_key = os.environ.get("TWELVEDATA_API_KEY", "79567f10cd1c4a19918511564686fbe2")
     
-    # Try fetching real data
     real_spot_from = None
     real_spot_to = None
-    real_vix_from = None
-    real_vix_to = None
     
     try:
-        # Twelve Data uses standard tickers. Some indices like SPX might require paid plans.
-        real_spot_from = fetch_twelvedata_spot(underlying, date_from, api_key)
-        real_spot_to = fetch_twelvedata_spot(underlying, date_to, api_key)
-        real_vix_from = fetch_twelvedata_spot("VIX", date_from, api_key)
-        real_vix_to = fetch_twelvedata_spot("VIX", date_to, api_key)
+        # One API call fetches the full time series array, saving our minutely limit
+        real_spot_from, real_spot_to = fetch_twelvedata_spot_range(underlying, date_from, date_to, api_key)
     except Exception:
         pass
 
@@ -57,31 +60,25 @@ def decompose_vix_change(
     
     using_real_data = False
     
-    if real_spot_from and real_spot_to and real_vix_from and real_vix_to:
+    if real_spot_from and real_spot_to:
         spot_from = real_spot_from
         spot_to = real_spot_to
-        vix_from = real_vix_from
-        vix_to = real_vix_to
         spot_move_pct = (spot_to - spot_from) / spot_from
-        abs_change = vix_to - vix_from
-        
-        base_iv_from = (vix_from - 3.0) / 100.0
-        base_iv_to = (vix_to - 3.0) / 100.0
-        iv_move_abs = base_iv_to - base_iv_from
         using_real_data = True
     else:
-        # Simulate market data
+        # Simulate spot data if API fails or dates don't match exactly
         spot_from = 5000 + np.random.normal(0, 100)
         spot_move_pct = np.random.normal(0.001, 0.015) 
         spot_to = spot_from * (1 + spot_move_pct)
         
-        base_iv_from = 0.15 + np.random.normal(0, 0.03)
-        iv_move_abs = np.random.normal(0.005, 0.01) 
-        base_iv_to = base_iv_from + iv_move_abs
-        
-        vix_from = base_iv_from * 100 + 3.0
-        vix_to = base_iv_to * 100 + 3.0
-        abs_change = vix_to - vix_from
+    # Always simulate VIX data since it requires a paid tier
+    base_iv_from = 0.15 + np.random.normal(0, 0.03)
+    iv_move_abs = np.random.normal(0.005, 0.01) 
+    base_iv_to = base_iv_from + iv_move_abs
+    
+    vix_from = base_iv_from * 100 + 3.0
+    vix_to = base_iv_to * 100 + 3.0
+    abs_change = vix_to - vix_from
 
     # Create synthetic curves to represent the market state around the spot price
     chain_from = mock_option_chain(spot_from, base_iv_from)
@@ -102,9 +99,9 @@ def decompose_vix_change(
     ]
     
     if using_real_data:
-        commentary.insert(0, "✓ Loaded real historical spot and VIX quotes from Twelve Data API.")
+        commentary.insert(0, f"✓ Loaded real historical underlying prices for {underlying} from Twelve Data (1 API request).")
     else:
-        commentary.insert(0, "⚠️ Twelve Data API limit reached or index paywalled. Using fallback simulation.")
+        commentary.insert(0, f"⚠️ Could not fetch {underlying} for these exact dates from API. Using fallback simulation.")
         
     return {
         "underlying": underlying,
